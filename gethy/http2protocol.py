@@ -1,3 +1,5 @@
+import logging
+
 import h2.config
 import h2.connection
 import h2.events
@@ -6,8 +8,6 @@ import h2.exceptions
 from . import event_handle
 from .event import RequestEvent, MoreDataToSendEvent
 from .state import State, Stream, StreamSender
-
-READ_CHUNK_SIZE = 8096
 
 
 class HTTP2Protocol:
@@ -32,31 +32,37 @@ class HTTP2Protocol:
 		:return: list, of Request
 		"""
 
-		print("HTTP2Protocol receive begin")
+		logging.debug("HTTP2Protocol receive begin")
 
+		# First, proceed incoming data
+		# handle any events emitted from h2
 		events = self.http2_connection.receive_data(data)
 		for event in events:
 			self.handle_event(event)
 
-		# if no ended stream are found, return an empty generator
-		# filter(lambda stream: stream.stream_ended, self.state.streams.values())
+		# This is a list of stream ids
 		stream_to_delete_from_inbound_cache = []
+
+		# inbound_streams is a dictionary with schema {stream_id: stream_obj}
+		# therefore use .values()
 		for stream in self.state.inbound_streams.values():
-			print("HTTP2Protocol.receive check inbound_streams")
+
+			logging.debug("HTTP2Protocol.receive check inbound_streams")
+
 			if stream.stream_ended:
-				print("HTTP2Protocol.receive", stream.stream_id, stream.stream_ended)
+				logging.debug("HTTP2Protocol.receive %s %s", stream.stream_id, stream.stream_ended)
 
+				# create a HTTP Request event, add it to current event list
 				event = RequestEvent(stream)
-
-				# emit an event means clear the cached inbound data
-				# the caller has to handle the event. otherwise I don't know what will happen
-				stream_to_delete_from_inbound_cache.append(stream.stream_id)
-
 				self.current_events.append(event)
 
+				# Emitting an event means to clear the cached inbound data
+				# The caller has to handle all returned events. Otherwise bad
+				stream_to_delete_from_inbound_cache.append(stream.stream_id)
+
 		# clear the inbound cache
-		for id in stream_to_delete_from_inbound_cache:
-			del self.state.inbound_streams[id]
+		for stream_id in stream_to_delete_from_inbound_cache:
+			del self.state.inbound_streams[stream_id]
 
 		for stream_sender in self.state.outbound_streams.values():
 			# todo: clear outbound data somewhere somehow
@@ -66,10 +72,10 @@ class HTTP2Protocol:
 				event = MoreDataToSendEvent(stream_sender)
 				self.current_events.append(event)
 
-		events = self.current_events
-		self.current_events = []
+		events = self.current_events	# assign all current events to an events variable and return this variable
+		self.current_events = []		# empty current event list by assign a newly allocated list
 
-		print("HTTP2Protocol receive return")
+		logging.debug("HTTP2Protocol receive return")
 		return events
 
 	def send(self, stream: Stream):
@@ -79,7 +85,7 @@ class HTTP2Protocol:
 		:param stream: a HTTP2 stream
 		:return: bytes which is to send to socket 
 		"""
-		print("HTTP2Protocol.send stream id", stream.stream_id)
+		logging.debug("HTTP2Protocol.send stream id %d", stream.stream_id)
 
 		stream_sender = StreamSender(stream, self.http2_connection)
 		stream_sender.send(8096)

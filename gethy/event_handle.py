@@ -22,6 +22,7 @@ def request_received(event: RequestReceived, state: State):
 
 	Stream.value_check(state.inbound_streams[event.stream_id])  # debug
 
+
 def data_received(event: DataReceived, state: State):
 	state.inbound_streams[event.stream_id].buffered_data.append(event.data)
 
@@ -33,6 +34,7 @@ def data_received(event: DataReceived, state: State):
 		stream_ended(event.stream_ended, state)
 
 	Stream.value_check(state.inbound_streams[event.stream_id])  # debug
+
 
 def window_updated(event: WindowUpdated, state: State):
 	stream_id = event.stream_id
