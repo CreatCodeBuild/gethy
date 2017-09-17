@@ -29,20 +29,27 @@ def test_receive():
 	assert len(e) == 1
 	assert isinstance(e[0], RequestEvent)
 
+	event = e[0]
+	assert event.stream.stream_id == 1
+	assert event.stream.headers == headers
+	assert event.stream.data == b'1'
+	assert event.stream.buffered_data is None
+	assert event.stream.stream_ended is True
 
-def test_send():
 
-	headers = [
-		(':status', '200'),
-		('content-length', '0')
-	]
-
-	stream = Stream(1, headers)
-	stream.stream_ended = True
-	stream.buffered_data = None
-	stream.data = b''
-
-	e = p.send(stream)
+# def test_send():
+#
+# 	headers = [
+# 		(':status', '200'),
+# 		('content-length', '0')
+# 	]
+#
+# 	stream = Stream(1, headers)
+# 	stream.stream_ended = True
+# 	stream.buffered_data = None
+# 	stream.data = b''
+#
+# 	e = p.send(stream)
 
 	# assert len(e) == 1
 	# assert isinstance(e[0], RequestEvent)
