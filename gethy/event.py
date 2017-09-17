@@ -1,13 +1,10 @@
-from gethy.state import Stream, StreamSender
-
-
 class H2Event:
 	pass
 
 
 class RequestEvent(H2Event):
 
-	def __init__(self, stream: Stream):
+	def __init__(self, stream):
 		self.stream = stream
 
 

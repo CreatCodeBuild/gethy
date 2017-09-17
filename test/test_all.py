@@ -1,11 +1,12 @@
 from gethy import HTTP2Protocol
 from gethy.event import RequestEvent
-from gethy.state import Stream
+from gethy.http2protocol import Stream
 
 from helpers import FrameFactory
 
 
 p = HTTP2Protocol()
+
 
 def test_receive():
 
