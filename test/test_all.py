@@ -1,18 +1,20 @@
 from gethy import HTTP2Protocol
-from gethy.event import RequestEvent
+from gethy.event import RequestEvent, MoreDataToSendEvent
 from gethy.http2protocol import Stream
 
 from helpers import FrameFactory
-
 
 p = HTTP2Protocol()
 
 
 def test_receive():
+	"""
+	able to receive headers with no data
+	"""
 
 	headers = [
 		(':method', 'POST'),
-		(':path',   '/'),
+		(':path', '/'),
 		(':scheme', 'https'),
 		(':authority', 'example.com'),
 	]
@@ -21,9 +23,8 @@ def test_receive():
 
 	p.receive(frame_factory.preamble())
 
-	f1 = frame_factory.build_headers_frame(headers, stream_id=1)
-	f2 = frame_factory.build_data_frame(b'1', stream_id=1, flags=['END_STREAM'],)
-	data = b''.join(map(lambda f: f.serialize(), [f1, f2]))
+	f1 = frame_factory.build_headers_frame(headers, stream_id=1, flags=['END_STREAM'])
+	data = f1.serialize()
 	e = p.receive(data)
 
 	assert len(e) == 1
@@ -32,36 +33,35 @@ def test_receive():
 	event = e[0]
 	assert event.stream.stream_id == 1
 	assert event.stream.headers == headers
-	assert event.stream.data == b'1'
+	assert event.stream.data == b''
 	assert event.stream.buffered_data is None
 	assert event.stream.stream_ended is True
 
 
 def test_send_headers_only():
-
 	headers = [
 		(':status', '200'),
-		('content-length', '0')
 	]
 
 	stream = Stream(1, headers)
 	stream.stream_ended = True
 	stream.buffered_data = None
-	stream.data = b'0'
+	stream.data = None
 
-	e = p.send(stream)
-	print(e)
-	for ev in e:
-		print(ev.data)
-	# assert len(e) == 1
-	# assert isinstance(e[0], RequestEvent)
+	events = p.send(stream)
+	assert len(events) == 2
+	for event in events:
+		assert isinstance(event, MoreDataToSendEvent)
 
 
 def test_send_headers_and_data():
-
+	"""
+	able to receive headers and small amount data.
+	able to send headers and small amount of data
+	"""
 	headers = [
 		(':method', 'POST'),
-		(':path',   '/'),
+		(':path', '/'),
 		(':scheme', 'https'),
 		(':authority', 'example.com'),
 	]
@@ -71,23 +71,22 @@ def test_send_headers_and_data():
 	# p.receive(frame_factory.preamble())
 
 	f1 = frame_factory.build_headers_frame(headers, stream_id=3)
-	f2 = frame_factory.build_data_frame(b'1', stream_id=3, flags=['END_STREAM'],)
+	f2 = frame_factory.build_data_frame(b'1', stream_id=3, flags=['END_STREAM'], )
 	data = b''.join(map(lambda f: f.serialize(), [f1, f2]))
-	e = p.receive(data)
+	p.receive(data)
 
-
-def test_f():
 	headers = [
-		(':status', '200'),
-		('content-length', '1'),
+		(':status', '400'),
 	]
 
 	stream = Stream(3, headers)
 	stream.stream_ended = True
 	stream.buffered_data = None
-	stream.data = b'1'
+	stream.data = b'0123456789'
 
-	e = p.send(stream)
+	events = p.send(stream)
+	assert len(events) == 3
+	for event in events:
+		assert isinstance(event, MoreDataToSendEvent)
 
-	# assert len(e) == 1
-	# assert isinstance(e[0], RequestEvent)
+# todo: test flow control with big amount of data

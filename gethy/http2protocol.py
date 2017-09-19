@@ -38,7 +38,7 @@ class Stream:
 	def value_check(instance):
 		if instance.stream_ended:
 			assert instance.buffered_data is None
-			assert isinstance(instance.data, bytes)
+			assert isinstance(instance.data, type(None)) or isinstance(instance.data, bytes)
 		else:
 			assert instance.data is None
 			assert isinstance(instance.buffered_data, list)
@@ -79,8 +79,10 @@ class StreamSender:
 
 			self.data_to_send.append(self.connection.data_to_send())
 
+			self.done = not self.stream.data
+
 		# send http body/data
-		while True:
+		while not self.done:
 
 			while not self.connection.local_flow_control_window(stream.stream_id):
 				self.is_waiting_for_flow_control = True
@@ -94,8 +96,6 @@ class StreamSender:
 			self.connection.send_data(stream.stream_id, data_to_send, end_stream=self.done)
 			self.data_to_send.append(self.connection.data_to_send())
 
-			if self.done:
-				break
 			self.i += chunk_size
 
 		self.data_to_send.append(self.connection.data_to_send())
