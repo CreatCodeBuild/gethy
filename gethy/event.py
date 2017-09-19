@@ -10,5 +10,6 @@ class RequestEvent(H2Event):
 
 class MoreDataToSendEvent(H2Event):
 
-	def __init__(self, data: bytes):
-		self.data = data
+	def __init__(self, data: bytes, bytes_sent: int):
+		self.data = data  # to send over TCP socket
+		self.bytes_sent = bytes_sent  # HTTP level bytes sent

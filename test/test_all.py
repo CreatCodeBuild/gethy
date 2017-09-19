@@ -13,7 +13,7 @@ def test_receive():
 	"""
 
 	headers = [
-		(':method', 'POST'),
+		(':method', 'GET'),
 		(':path', '/'),
 		(':scheme', 'https'),
 		(':authority', 'example.com'),
@@ -82,11 +82,49 @@ def test_send_headers_and_data():
 	stream = Stream(3, headers)
 	stream.stream_ended = True
 	stream.buffered_data = None
-	stream.data = b'0123456789'
+	stream.data = bytes(1024*64)
 
 	events = p.send(stream)
-	assert len(events) == 3
+	assert len(events) == 10
 	for event in events:
 		assert isinstance(event, MoreDataToSendEvent)
 
-# todo: test flow control with big amount of data
+
+# def test_flow_control():
+# 	"""
+# 	test flow control by sending large data
+# 	"""
+#
+# 	headers = [
+# 		(':method', 'GET'),
+# 		(':path', '/'),
+# 		(':scheme', 'https'),
+# 		(':authority', 'example.com'),
+# 	]
+#
+# 	frame_factory = FrameFactory()
+#
+# 	# p.receive(frame_factory.preamble())
+#
+# 	f = frame_factory.build_headers_frame(headers, stream_id=5)
+# 	p.receive(f.serialize())
+#
+# 	headers = ((':status', '400'),)
+#
+# 	stream = Stream(5, headers)
+# 	stream.stream_ended = True
+# 	stream.buffered_data = None
+# 	stream.data = bytes(1024 * 1024 * 100)  # 8MB
+#
+# 	data_send = 0
+#
+# 	while data_send != 1024 * 1024
+# 	events = p.send(stream)
+# 	# assert len(events) == 3
+# 	for event in events:
+# 		data_sent += event.bytes_sent
+# 		assert isinstance(event, MoreDataToSendEvent)
+#
+# 	while da
+#
+# 	print(len(events))

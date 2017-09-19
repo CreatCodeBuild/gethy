@@ -49,7 +49,7 @@ class StreamSender:
 	"""
 
 	def __init__(self, stream: Stream, connection: h2.connection):
-		print("StreamSender.__init__", stream.stream_id, stream.stream_ended, stream.buffered_data, stream.data)
+		print("StreamSender.__init__", stream.stream_id, stream.stream_ended)
 		Stream.value_check(stream)
 
 		self.stream = stream
@@ -86,6 +86,7 @@ class StreamSender:
 
 			while not self.connection.local_flow_control_window(stream.stream_id):
 				self.is_waiting_for_flow_control = True
+				print("StreamSender:: waiting for flow control %s sent" % self.i)
 				return
 
 			chunk_size = min(self.connection.local_flow_control_window(stream.stream_id), read_chunk_size)
@@ -96,7 +97,7 @@ class StreamSender:
 			self.connection.send_data(stream.stream_id, data_to_send, end_stream=self.done)
 			self.data_to_send.append(self.connection.data_to_send())
 
-			self.i += chunk_size
+			self.i += len(data_to_send)
 
 		self.data_to_send.append(self.connection.data_to_send())
 
