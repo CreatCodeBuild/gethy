@@ -60,7 +60,7 @@ class StreamSender:
 		self.i = 0  # data sent index
 		self.connection = connection
 
-		self.data_to_send = []
+		self.data_to_send_events = []
 
 	def send(self, read_chunk_size):
 
@@ -77,7 +77,7 @@ class StreamSender:
 			self.connection.send_headers(stream.stream_id, stream.headers, end_stream=self.done)
 			self.headers_sent = True
 
-			self.data_to_send.append(self.connection.data_to_send())
+			self.data_to_send_events.append(MoreDataToSendEvent(self.connection.data_to_send(), None))
 
 			self.done = not self.stream.data
 
@@ -95,11 +95,11 @@ class StreamSender:
 			self.done = (len(data_to_send) != chunk_size)
 
 			self.connection.send_data(stream.stream_id, data_to_send, end_stream=self.done)
-			self.data_to_send.append(self.connection.data_to_send())
+			self.data_to_send_events.append(MoreDataToSendEvent(self.connection.data_to_send(), len(data_to_send)))
 
 			self.i += len(data_to_send)
 
-		self.data_to_send.append(self.connection.data_to_send())
+		self.data_to_send_events.append(MoreDataToSendEvent(self.connection.data_to_send(), None))
 
 
 class HTTP2Protocol:
@@ -190,7 +190,7 @@ class HTTP2Protocol:
 		stream_sender = StreamSender(stream, self.http2_connection)
 		stream_sender.send(8096)
 
-		return [MoreDataToSendEvent(data_to_send) for data_to_send in stream_sender.data_to_send]
+		return stream_sender.data_to_send_events
 
 	def handle_event(self, event: h2.events.Event):
 		print("HTTP2Protocol.handle_event", type(event))
