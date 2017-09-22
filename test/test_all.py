@@ -84,7 +84,7 @@ def test_send_headers_and_data():
 	stream = Stream(3, headers)
 	stream.stream_ended = True
 	stream.buffered_data = None
-	stream.data = bytes(1024*63)
+	stream.data = bytes(1024 * 63)
 
 	events = p.send(stream)
 	assert len(events) == 10
@@ -99,7 +99,6 @@ def test_flow_control():
 	"""
 	test flow control by sending large data
 	"""
-	print("\n\n\n\n\n\n\n\n\n\n")
 	headers = [
 		(':method', 'GET'),
 		(':path', '/'),
@@ -125,34 +124,29 @@ def test_flow_control():
 	data_sent = 0
 
 	events = p.send(stream)
-	print(p.outbound_streams)
+
 	if events:
 		for event in events:
 
 			if event.application_bytes_sent:
 				print(event.application_bytes_sent)
 				data_sent += event.application_bytes_sent
-				print('data_send::', data_sent)
+
 			assert isinstance(event, MoreDataToSendEvent)
 
-
 	while data_sent < size:
-		print('<<<<<<<<<<<<<<<<<<<<<<<', data_sent, size)
 
 		f = frame_factory.build_window_update_frame(0, 30000)
 		events = p.receive(f.serialize())
 		f = frame_factory.build_window_update_frame(5, 30000)
 		events.extend(p.receive(f.serialize()))
-		print("p.receive")
 
-		print("events", events)
 		for event in events:
 
 			if event.application_bytes_sent:
 				data_sent += event.application_bytes_sent
-				print('data_send:', data_sent)
+
 			assert isinstance(event, MoreDataToSendEvent)
 
-	print('data_sent ---', data_sent)
 	diff = data_sent - size
 	assert diff == 0
