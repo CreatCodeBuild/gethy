@@ -49,7 +49,6 @@ class StreamSender:
 	"""
 
 	def __init__(self, stream: Stream, connection: h2.connection):
-		print("StreamSender.__init__", stream.stream_id, stream.stream_ended)
 		Stream.value_check(stream)
 
 		self.stream = stream
@@ -60,24 +59,20 @@ class StreamSender:
 		self.i = 0  # data sent index
 		self.connection = connection
 
-		self.data_to_send = []
-
 	def send(self, read_chunk_size):
+
+		data_to_send_events = []
 
 		stream = self.stream
 
-		print("StreamSender.send", stream.stream_id)
-
 		if not self.headers_sent:
-			print("This Line Should Only Be Print Once Per Stream ID", stream.stream_id)
+			logging.info("This Line Should Only Be Print Once Per Stream ID %s" % stream.stream_id)
 			self.done = not stream.data
-
-			print("StreamSender", stream.stream_id, stream.headers, "end", self.done)
 
 			self.connection.send_headers(stream.stream_id, stream.headers, end_stream=self.done)
 			self.headers_sent = True
 
-			self.data_to_send.append(self.connection.data_to_send())
+			data_to_send_events.append(MoreDataToSendEvent(self.connection.data_to_send(), None))
 
 			self.done = not self.stream.data
 
@@ -85,21 +80,25 @@ class StreamSender:
 		while not self.done:
 
 			while not self.connection.local_flow_control_window(stream.stream_id):
+				logging.info('StreamSender:: local_flow_control_window of stream %s: %s' %
+							 (stream.stream_id, self.connection.local_flow_control_window(stream.stream_id)))
 				self.is_waiting_for_flow_control = True
-				print("StreamSender:: waiting for flow control %s sent" % self.i)
-				return
+				logging.info("StreamSender:: waiting for flow control %s sent" % self.i)
+				return data_to_send_events
 
 			chunk_size = min(self.connection.local_flow_control_window(stream.stream_id), read_chunk_size)
 
-			data_to_send = stream.data[self.i: self.i+chunk_size]
+			data_to_send = stream.data[self.i: self.i + chunk_size]
 			self.done = (len(data_to_send) != chunk_size)
 
 			self.connection.send_data(stream.stream_id, data_to_send, end_stream=self.done)
-			self.data_to_send.append(self.connection.data_to_send())
+
+			data_to_send_events.append(MoreDataToSendEvent(self.connection.data_to_send(), len(data_to_send)))
 
 			self.i += len(data_to_send)
 
-		self.data_to_send.append(self.connection.data_to_send())
+		data_to_send_events.append(MoreDataToSendEvent(self.connection.data_to_send(), None))
+		return data_to_send_events
 
 
 class HTTP2Protocol:
@@ -112,6 +111,7 @@ class HTTP2Protocol:
 	:property flow_control_events: a list of stream ids which are flow controlled
 	:property outbound_streams: a dictionary of StreamSender-s. {stream_id: StreamSender}
 	"""
+
 	def __init__(self):
 		self.current_events = []
 
@@ -140,6 +140,37 @@ class HTTP2Protocol:
 		for event in events:
 			self.handle_event(event)
 
+		self.inbound()
+		self.outbound()
+
+		events = self.current_events  # assign all current events to an events variable and return this variable
+		self.current_events = []  # empty current event list by assign a newly allocated list
+
+		logging.debug("HTTP2Protocol receive return")
+		return events
+
+	def send(self, stream: Stream):
+		"""
+		Prepare TCP/Socket level data to send. This function does not do IO.
+
+		Create a StreamSender and add it to outbound cache
+		
+		:param stream: a HTTP2 stream
+		:return: bytes which is to send to socket 
+		"""
+		self.outbound_streams[stream.stream_id] = StreamSender(stream, self.http2_connection)
+
+		self.inbound()
+		self.outbound()
+
+		events = self.current_events  # assign all current events to an events variable and return this variable
+		self.current_events = []  # empty current event list by assign a newly allocated list
+		return events
+
+	def inbound(self):
+		"""
+		exercise all inbound streams
+		"""
 		# This is a list of stream ids
 		stream_to_delete_from_inbound_cache = []
 
@@ -164,36 +195,31 @@ class HTTP2Protocol:
 		for stream_id in stream_to_delete_from_inbound_cache:
 			del self.inbound_streams[stream_id]
 
-		for stream_sender in self.outbound_streams.values():
-			# todo: clear outbound data somewhere somehow
-			print("HTTP2Protocol.receive check if any stream sender still cached outbound_streams")
+	def outbound(self):
+		"""
+		exercise all out bound stream senders
+		"""
+		stream_sender_to_delete_from_outbound_cache = []
+
+		for stream_id, stream_sender in self.outbound_streams.items():
+
 			if not stream_sender.is_waiting_for_flow_control:
-				print("HTTP2Protocol.receive", stream_sender.stream_id)
-				event = MoreDataToSendEvent(stream_sender)
-				self.current_events.append(event)
 
-		events = self.current_events	# assign all current events to an events variable and return this variable
-		self.current_events = []		# empty current event list by assign a newly allocated list
+				events = stream_sender.send(8096)
 
-		logging.debug("HTTP2Protocol receive return")
-		return events
+				self.current_events.extend(events)
 
-	def send(self, stream: Stream):
-		"""
-		Prepare TCP/Socket level data to send. This function does not do IO.
-		
-		:param stream: a HTTP2 stream
-		:return: bytes which is to send to socket 
-		"""
-		logging.debug("HTTP2Protocol.send stream id %d", stream.stream_id)
+				if stream_sender.done:
+					stream_sender_to_delete_from_outbound_cache.append(stream_id)
 
-		stream_sender = StreamSender(stream, self.http2_connection)
-		stream_sender.send(8096)
+				if stream_sender.is_waiting_for_flow_control:
+					self.flow_control_events.append(stream_id)
 
-		return [MoreDataToSendEvent(data_to_send) for data_to_send in stream_sender.data_to_send]
+		# clear outbound cache
+		for stream_id in stream_sender_to_delete_from_outbound_cache:
+			del self.outbound_streams[stream_id]
 
 	def handle_event(self, event: h2.events.Event):
-		print("HTTP2Protocol.handle_event", type(event))
 		if isinstance(event, h2.events.RequestReceived):
 			self.request_received(event)
 
@@ -204,13 +230,13 @@ class HTTP2Protocol:
 			self.window_updated(event)
 
 		else:
-			print("Has not implement ", type(event), " handler")
+			logging.info("Has not implement %s handler" % type(event))
 
 	def request_received(self, event: RequestReceived):
 		self.inbound_streams[event.stream_id] = Stream(event.stream_id, event.headers)
 
 		if event.priority_updated:
-			print("RequestReceived.priority_updated is not implemented")
+			logging.warning("RequestReceived.priority_updated is not implemented")
 
 		if event.stream_ended:
 			self.stream_ended(event.stream_ended)
@@ -221,8 +247,7 @@ class HTTP2Protocol:
 		self.inbound_streams[event.stream_id].buffered_data.append(event.data)
 
 		if event.flow_controlled_length:
-			print("DataReceived.flow_controlled_length is not implemented")
-			print(event.flow_controlled_length)
+			logging.info("flow_controlled_length of stream %s is %d" % (event.stream_id, event.flow_controlled_length))
 
 		if event.stream_ended:
 			self.stream_ended(event.stream_ended)
@@ -232,21 +257,17 @@ class HTTP2Protocol:
 	def window_updated(self, event: WindowUpdated):
 		stream_id = event.stream_id
 
-		print("window_updated", stream_id, event.delta)
-
 		if stream_id and stream_id in self.flow_control_events:
-			print("window_updated: stream_id in state.flow_control_events")
-			stream_id = self.flow_control_events.pop(stream_id)
+			self.flow_control_events.remove(stream_id)
 			stream_sender = self.outbound_streams[stream_id]
 			stream_sender.is_waiting_for_flow_control = False
 
 		elif not stream_id:
-			print("window_updated stream_id is", stream_id)
 			# Need to keep a real list here to use only the events present at
 			# this time.
 			blocked_streams = self.flow_control_events
 			for stream_id in blocked_streams:
-				print("window_updated blocked streams", blocked_streams)
+				logging.info("window_updated blocked streams %s" % blocked_streams)
 				stream_sender = self.outbound_streams[stream_id]
 				stream_sender.is_waiting_for_flow_control = False
 				self.flow_control_events = []
@@ -257,7 +278,3 @@ class HTTP2Protocol:
 		stream.data = b''.join(stream.buffered_data)
 		stream.buffered_data = None
 		Stream.value_check(stream)  # debug
-
-
-
-

@@ -4,6 +4,8 @@ from gethy.http2protocol import Stream
 
 from helpers import FrameFactory
 
+from h2.events import WindowUpdated
+
 p = HTTP2Protocol()
 
 
@@ -82,49 +84,69 @@ def test_send_headers_and_data():
 	stream = Stream(3, headers)
 	stream.stream_ended = True
 	stream.buffered_data = None
-	stream.data = bytes(1024*64)
+	stream.data = bytes(1024 * 63)
 
 	events = p.send(stream)
 	assert len(events) == 10
 	for event in events:
 		assert isinstance(event, MoreDataToSendEvent)
 
+	assert not p.outbound_streams
+	assert not p.inbound_streams
 
-# def test_flow_control():
-# 	"""
-# 	test flow control by sending large data
-# 	"""
-#
-# 	headers = [
-# 		(':method', 'GET'),
-# 		(':path', '/'),
-# 		(':scheme', 'https'),
-# 		(':authority', 'example.com'),
-# 	]
-#
-# 	frame_factory = FrameFactory()
-#
-# 	# p.receive(frame_factory.preamble())
-#
-# 	f = frame_factory.build_headers_frame(headers, stream_id=5)
-# 	p.receive(f.serialize())
-#
-# 	headers = ((':status', '400'),)
-#
-# 	stream = Stream(5, headers)
-# 	stream.stream_ended = True
-# 	stream.buffered_data = None
-# 	stream.data = bytes(1024 * 1024 * 100)  # 8MB
-#
-# 	data_send = 0
-#
-# 	while data_send != 1024 * 1024
-# 	events = p.send(stream)
-# 	# assert len(events) == 3
-# 	for event in events:
-# 		data_sent += event.bytes_sent
-# 		assert isinstance(event, MoreDataToSendEvent)
-#
-# 	while da
-#
-# 	print(len(events))
+
+def test_flow_control():
+	"""
+	test flow control by sending large data
+	"""
+	headers = [
+		(':method', 'GET'),
+		(':path', '/'),
+		(':scheme', 'https'),
+		(':authority', 'example.com'),
+	]
+
+	frame_factory = FrameFactory()
+
+	# p.receive(frame_factory.preamble())
+
+	f = frame_factory.build_headers_frame(headers, stream_id=5)
+	p.receive(f.serialize())
+
+	headers = ((':status', '400'),)
+
+	stream = Stream(5, headers)
+	stream.stream_ended = True
+	stream.buffered_data = None
+	size = 1024 * 63 * 100
+	stream.data = bytes(size)  # 8MB
+
+	data_sent = 0
+
+	events = p.send(stream)
+
+	if events:
+		for event in events:
+
+			if event.application_bytes_sent:
+				print(event.application_bytes_sent)
+				data_sent += event.application_bytes_sent
+
+			assert isinstance(event, MoreDataToSendEvent)
+
+	while data_sent < size:
+
+		f = frame_factory.build_window_update_frame(0, 30000)
+		events = p.receive(f.serialize())
+		f = frame_factory.build_window_update_frame(5, 30000)
+		events.extend(p.receive(f.serialize()))
+
+		for event in events:
+
+			if event.application_bytes_sent:
+				data_sent += event.application_bytes_sent
+
+			assert isinstance(event, MoreDataToSendEvent)
+
+	diff = data_sent - size
+	assert diff == 0
