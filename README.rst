@@ -15,9 +15,18 @@ You can also install it from pypi. But the version could be behind GitHub's mast
 .. code:: bash
 
   $ pip install gethy
+  
+Supported Version
+=================
+- CPython3.5
+- CPython3.6
+- PyPy3.5 v5.9
+Other versions and implementations of python should work. (Not tested)
+
+No Python3 specific syntax or technique used. But, hey, this is 2017! Python3 came out 8 years ago and Obama was out of office. Just deal with it.
 
 GetHy?
-==============
+======
 GetHy is pronounced "Get high". It stands for "Get Hypertext Transfer Protocol". It is one of those awkward word-playing jokes.
 
 GetHy is an application level IO indenpent HTTP/2 library. It can be used in any IO model and is super easy to use.
