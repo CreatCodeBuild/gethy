@@ -122,6 +122,7 @@ class HTTP2Protocol:
 
 		config = h2.config.H2Configuration(client_side=False, header_encoding='utf-8')
 		self.http2_connection = h2.connection.H2Connection(config=config)
+		self.block_size = 8192  # byte
 
 	def receive(self, data: bytes):
 		"""
@@ -205,7 +206,7 @@ class HTTP2Protocol:
 
 			if not stream_sender.is_waiting_for_flow_control:
 
-				events = stream_sender.send(8096)
+				events = stream_sender.send(self.block_size)
 
 				self.current_events.extend(events)
 
