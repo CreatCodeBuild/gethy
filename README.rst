@@ -4,17 +4,25 @@ GET Hy the Fastest Way!
 
 Installation
 ============
+## For Direct Use
 Because it's at early stage, installing from GitHub is the preferred way.
 
 .. code:: bash
 
   $ pip install git+https://github.com/CreatCodeBuild/gethy
 
-You can also install it from pypi. But the version could be behind GitHub's master branch.
+You can also install it from PyPi. But the version could be behind GitHub's master branch.
 
 .. code:: bash
 
   $ pip install gethy
+
+## For Development
+.. code:: bash
+
+  $ git clone https://github.com/CreatCodeBuild/gethy
+  $ cd gethy
+  $ pip install . -e .[test]
   
 Supported Version
 =================

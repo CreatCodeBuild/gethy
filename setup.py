@@ -75,6 +75,6 @@ setup(
     # $ pip install -e .[dev,test]
     extras_require={
         'dev': [],
-        'test': [],
+        'test': ['pytest'],
     }
 )
