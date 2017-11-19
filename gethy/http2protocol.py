@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 import h2.config
 import h2.connection
@@ -11,7 +12,7 @@ from h2.events import (
 	StreamEnded
 )
 
-from .event import RequestEvent, MoreDataToSendEvent
+from .event import RequestEvent, MoreDataToSendEvent, H2Event
 
 
 class Stream:
@@ -124,7 +125,7 @@ class HTTP2Protocol:
 		self.http2_connection = h2.connection.H2Connection(config=config)
 		self.block_size = 8192  # byte
 
-	def receive(self, data: bytes):
+	def receive(self, data: bytes) -> List[H2Event]:
 		"""
 		receive bytes, return HTTP Request object if any stream is ready
 		else return None
@@ -150,7 +151,7 @@ class HTTP2Protocol:
 		logging.debug("HTTP2Protocol receive return")
 		return events
 
-	def send(self, stream: Stream):
+	def send(self, stream: Stream) -> List[H2Event]:
 		"""
 		Prepare TCP/Socket level data to send. This function does not do IO.
 
